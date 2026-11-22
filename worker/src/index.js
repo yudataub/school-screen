@@ -6,6 +6,8 @@
 //   PUT  /api/config     save the content           (Authorization: Bearer <password>)
 //   POST /api/image      upload one picture, returns {src}
 //   GET  /api/images     list of every uploaded picture
+//   GET  /audio/<name>   an uploaded tune (public)
+//   POST /api/audio      upload one tune (mp3/m4a/wav/ogg, up to 20MB), returns {src}
 // Storage: KV namespace SCREEN ("config", "img:<name>", "bak:<time>" = previous versions, kept 60 days).
 // Secret: ADMIN_PASSWORD.
 import ADMIN from './admin.html';
@@ -13,6 +15,7 @@ import ADMIN from './admin.html';
 const CORS = { 'access-control-allow-origin': '*' };
 const json = (o, status = 200) => new Response(JSON.stringify(o), {
   status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...CORS } });
+const AEXT = { 'audio/mpeg': 'mp3', 'audio/mp3': 'mp3', 'audio/mp4': 'm4a', 'audio/x-m4a': 'm4a', 'audio/wav': 'wav', 'audio/x-wav': 'wav', 'audio/ogg': 'ogg' };
 const EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/gif': 'gif', 'image/webp': 'webp', 'image/svg+xml': 'svg' };
 
 export default {
@@ -33,12 +36,13 @@ export default {
         if (!t) return json({ error: 'no config yet' }, 404);
         return new Response(t, { headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...CORS } });
       }
-      if (p.startsWith('/images/')) {
+      if (p.startsWith('/images/') || p.startsWith('/audio/')) {
+        const tune = p.startsWith('/audio/');
         let name;
-        try { name = decodeURIComponent(p.slice(8)); } catch (e) { return json({ error: 'bad name' }, 400); }
-        const r = await env.SCREEN.getWithMetadata('img:' + name, 'arrayBuffer');
+        try { name = decodeURIComponent(p.slice(tune ? 7 : 8)); } catch (e) { return json({ error: 'bad name' }, 400); }
+        const r = await env.SCREEN.getWithMetadata((tune ? 'aud:' : 'img:') + name, 'arrayBuffer');
         if (!r.value) return json({ error: 'not found' }, 404);
-        return new Response(r.value, { headers: { 'content-type': (r.metadata && r.metadata.type) || 'image/jpeg',
+        return new Response(r.value, { headers: { 'content-type': (r.metadata && r.metadata.type) || (tune ? 'audio/mpeg' : 'image/jpeg'),
           'cache-control': 'public, max-age=604800', 'x-content-type-options': 'nosniff',
           'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'", ...CORS } });
       }
@@ -87,6 +91,16 @@ export default {
       const name = new Date().toISOString().slice(0, 10) + '-' + rnd + '.' + EXT[type];
       await env.SCREEN.put('img:' + name, buf, { metadata: { type } });
       return json({ ok: true, src: 'images/' + name });
+    }
+    if (p === '/api/audio' && req.method === 'POST') {
+      const type = (req.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+      if (!AEXT[type]) return json({ error: 'not a tune' }, 415);
+      const buf = await req.arrayBuffer();
+      if (!buf.byteLength || buf.byteLength > 20 * 1024 * 1024) return json({ error: 'too big' }, 413);
+      const rnd = [...crypto.getRandomValues(new Uint8Array(5))].map(b => b.toString(16).padStart(2, '0')).join('');
+      const name = new Date().toISOString().slice(0, 10) + '-' + rnd + '.' + AEXT[type];
+      await env.SCREEN.put('aud:' + name, buf, { metadata: { type } });
+      return json({ ok: true, src: 'audio/' + name });
     }
     return json({ error: 'not found' }, 404);
   }
