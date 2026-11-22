@@ -1,0 +1,10 @@
+{
+  // School hallway screen: content server + admin site (the page itself is kol-toda.co.il/screen/).
+  // Deploy: C:\personal-bots\worker\node_modules\.bin\wrangler.cmd deploy   (the general wrangler login, account yudataub)
+  // Secret: ADMIN_PASSWORD (the value is in C:\school-screen\.secret\admin_password.txt, not in git)
+  "name": "school-screen",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-01",
+  "kv_namespaces": [{ "binding": "SCREEN", "id": "8513a5b7818c4e2cb7aec9f3c211dd40" }],
+  "rules": [{ "type": "Text", "globs": ["**/*.html"], "fallthrough": false }]
+}
