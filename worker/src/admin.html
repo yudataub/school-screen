@@ -107,6 +107,16 @@ label.f.narrow{flex:0 0 130px}
 #toast{position:fixed;bottom:96px;right:50%;transform:translateX(50%);z-index:40;background:#111;color:#fff;padding:11px 22px;border-radius:999px;
   font-weight:500;box-shadow:0 6px 20px rgba(0,0,0,.3);max-width:92vw;text-align:center}
 #toast.err{background:var(--red)}
+.atitle{font:700 20px/1.3 "Frank Ruhl Libre",serif;color:#111}
+.abody{color:var(--muted);font-size:15px;white-space:pre-line;margin-bottom:8px}
+.sel{padding:7px 10px;border:1.5px solid var(--line);border-radius:9px;background:#fff;font:inherit}
+.gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px}
+.gal .tile{border:1.5px solid var(--line);border-radius:12px;padding:8px;background:#fffdf9;text-align:center}
+.gal .tile img{display:block;width:100%;aspect-ratio:16/9;object-fit:contain;background:var(--dark);border-radius:8px}
+.gal .meta{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--muted);margin:6px 2px}
+.gal .badge{white-space:nowrap;border-radius:999px;padding:1px 9px;font-weight:700;background:#f3f4f6;color:var(--muted)}
+.gal .badge.on{background:#dcfce7;color:#166534}
+.gal .badge.arc{background:#fef3c7;color:#92400e}
 .sig{margin-top:24px;background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:12px 16px;font-size:15px;text-align:center}
 .sig a{color:var(--brand);font-weight:700}
 
@@ -154,7 +164,7 @@ label.f.narrow{flex:0 0 130px}
 
     <section class="sec">
       <h2>מוצג כל היום</h2>
-      <p class="hint">השקופיות האלה מתחלפות בלולאה בכל שעה שאין בה חלון זמן פעיל.</p>
+      <p class="hint">השקופיות האלה מתחלפות בלולאה בכל שעה שאין בה חלון זמן פעיל.<br>📐 תמונה מומלצת: <b>לרוחב, 1920×1080</b> (יחס 16:9). תמונה לאורך מוצגת שלמה, אבל קטנה ועם שוליים כהים בצדדים.</p>
       <div id="defSlides"></div>
     </section>
 
@@ -163,6 +173,19 @@ label.f.narrow{flex:0 0 130px}
       <p class="hint">בשעות שתקבעו (הפסקה, תפילה, סוף יום…) המסך עובר לשקופיות של החלון, ובסופו חוזר ל"מוצג כל היום". אם שני חלונות חופפים, העליון קובע.</p>
       <div id="wins"></div>
       <button class="btn gold" id="addWin" type="button">+ חלון זמן חדש</button>
+    </section>
+
+    <section class="sec">
+      <h2>📦 ארכיון</h2>
+      <p class="hint">שקופיות ותמונות ששמרתם בצד. הן לא מוצגות במסך, ואפשר להחזיר אותן בכל רגע. גם הארכיון נשמר רק בלחיצה על "שמירה".</p>
+      <div id="arch"></div>
+    </section>
+
+    <section class="sec">
+      <h2>🖼 כל התמונות שהועלו</h2>
+      <p class="hint">כל תמונה שהעליתם אי פעם נשארת כאן, גם אם הוחלפה או נמחקה מהמסך. בוחרים לאן להוסיף, ולוחצים על "+ למסך" מתחת לתמונה.</p>
+      <div class="adders" style="margin:0 0 12px"><span class="lbl" style="align-self:center;margin:0">להוסיף אל:</span><select class="sel" id="galTarget"></select></div>
+      <div id="gal" class="gal"></div>
     </section>
 
     <div class="sig">📚 חומרי לימוד תורניים חינם, במאגר הקול החמישי: <a href="https://www.kol-toda.co.il/" target="_blank" rel="noopener">www.kol-toda.co.il</a></div>
@@ -252,7 +275,7 @@ function outSlide(s){
 function inCfg(c){
   c=c||{};
   return {schoolName:c.schoolName||'',slideSeconds:String(c.slideSeconds||10),refreshMinutes:String(c.refreshMinutes||5),
-    def:(c['default']||[]).map(inSlide),
+    def:(c['default']||[]).map(inSlide),arch:(c.archive||[]).map(inSlide),
     wins:(c.breaks||[]).map(function(b){
       return {name:b.name||'',days:(b.days||[]).map(Number),start:b.start||'',end:b.end||'',slides:(b.slides||[]).map(inSlide)};
     })};
@@ -266,14 +289,15 @@ function outCfg(){
     'default':keep(cfg.def),
     breaks:cfg.wins.map(function(w){
       return {name:w.name.trim()||'חלון זמן',days:w.days.slice().sort(),start:pad(w.start),end:pad(w.end),slides:keep(w.slides)};
-    })};
+    }),
+    archive:keep(cfg.arch)};
 }
 function ser(){return JSON.stringify(outCfg(),null,2);}
 
 function load(){
   return fetch('/config.json?v='+Date.now()).then(function(r){return r.ok?r.json():{};}).catch(function(){return {};}).then(function(c){
     cfg=inCfg(c);saved=ser();savedCfg=outCfg();
-    render();
+    render();loadGallery();
   });
 }
 
@@ -282,6 +306,7 @@ function changed(){
   $('state').textContent=d?'יש שינויים שעוד לא נשמרו':'הכול שמור ✓';
   $('state').className=d?'dirty':'';
   $('save').disabled=!d;$('revert').disabled=!d;
+  updateBadges();
   return d;
 }
 window.addEventListener('beforeunload',function(e){if(cfg&&ser()!==saved){e.preventDefault();e.returnValue='';}});
@@ -304,7 +329,8 @@ function shrink(file){
   });
 }
 function upload(file){
-  return shrink(file).then(function(b){return api('POST','/api/image',b,b.type||file.type);}).then(function(j){return j.src;});
+  return shrink(file).then(function(b){return api('POST','/api/image',b,b.type||file.type);}).then(function(j){
+    gallery.unshift(j.src);renderGallery();return j.src;});
 }
 var pickCb=null;
 function pick(multiple,cb){pickCb=cb;var f=$('file');f.multiple=multiple;f.value='';f.click();}
@@ -340,7 +366,9 @@ function slideList(box,list){
       tw.appendChild(thumb(s));tw.appendChild(h('div',{class:'num',text:String(i+1)}));
       tw.appendChild(h('div',{class:'picbtns'},[
         h('button',{class:'btn ghost sm',type:'button',text:s.src?'החלפת תמונה':'🖼 הוספת תמונה',
-          onclick:function(){pick(false,function(a){s.src=a[0];redraw();changed();});}}),
+          onclick:function(){pick(false,function(a){
+            if(s.src){cfg.arch.unshift(JSON.parse(JSON.stringify(s)));renderArch();toast('התמונה הקודמת נשמרה בארכיון (בתחתית הדף)');}
+            s.src=a[0];redraw();changed();});}}),
         s.src?h('button',{class:'btn danger sm',type:'button',text:'בלי תמונה',onclick:function(){s.src='';redraw();changed();}}):null
       ]));
     }
@@ -361,6 +389,8 @@ function slideList(box,list){
       h('div',{class:'tools'},[
         h('button',{class:'icon',type:'button',title:'להעלות',text:'▲',disabled:i===0,onclick:function(){list.splice(i-1,0,list.splice(i,1)[0]);slideList(box,list);changed();}}),
         h('button',{class:'icon',type:'button',title:'להוריד',text:'▼',disabled:i===list.length-1,onclick:function(){list.splice(i+1,0,list.splice(i,1)[0]);slideList(box,list);changed();}}),
+        h('button',{class:'icon',type:'button',title:'להעביר לארכיון',text:'📦',onclick:function(){
+          cfg.arch.unshift(list.splice(i,1)[0]);slideList(box,list);renderArch();changed();toast('השקופית עברה לארכיון (בתחתית הדף)');}}),
         h('button',{class:'icon del',type:'button',title:'למחוק את השקופית',text:'🗑',onclick:function(){list.splice(i,1);slideList(box,list);changed();}})
       ])
     ]));
@@ -372,6 +402,80 @@ function slideList(box,list){
     h('button',{class:'btn sm',type:'button',text:'+ תמונות',onclick:function(){
       pick(true,function(a){a.forEach(function(src){list.push(inSlide({src:src}));});slideList(box,list);changed();});}})
   ]));
+}
+
+// ---------- ארכיון ----------
+function renderArch(){
+  var box=$('arch');box.innerHTML='';
+  if(!cfg.arch.length){box.appendChild(h('div',{class:'none',text:'הארכיון ריק. כדי לשמור שקופית בצד לוחצים על 📦 לידה. גם תמונה שמחליפים נשמרת כאן לבד.'}));return;}
+  cfg.arch.forEach(function(s,i){
+    var sel=h('select',{class:'sel'},[h('option',{value:'def',text:'מוצג כל היום'})].concat(cfg.wins.map(function(w,n){
+      return h('option',{value:String(n),text:'חלון: '+(w.name||'חלון זמן')});})));
+    var del=h('button',{class:'btn danger sm',type:'button',text:'מחיקה לצמיתות',onclick:function(){
+      if(del.dataset.sure){cfg.arch.splice(i,1);renderArch();changed();return;}
+      del.dataset.sure='1';del.textContent='בטוח? לחצו שוב';
+      setTimeout(function(){delete del.dataset.sure;del.textContent='מחיקה לצמיתות';},3500);
+    }});
+    box.appendChild(h('div',{class:'slide'},[
+      h('div',{class:'thumbwrap'},[thumb(s)]),
+      h('div',{class:'fields'},[
+        h('div',{class:'atitle',text:s.title||(s.src?'תמונה בלי כיתוב':'שקופית טקסט')}),
+        h('div',{class:'abody',text:s.body}),
+        h('div',{class:'adders'},[
+          h('span',{class:'lbl',style:'align-self:center;margin:0',text:'להחזיר אל:'}),sel,
+          h('button',{class:'btn sm',type:'button',text:'↩ החזרה למסך',onclick:function(){
+            var t=sel.value==='def'?cfg.def:cfg.wins[+sel.value].slides;
+            t.push(cfg.arch.splice(i,1)[0]);render();toast('השקופית חזרה. לא לשכוח לשמור.');}}),
+          del
+        ])
+      ])
+    ]));
+  });
+}
+
+// ---------- כל התמונות ----------
+var gallery=[],galBadges=[];
+function loadGallery(){
+  return api('GET','/api/images').then(function(j){gallery=j.images||[];renderGallery();})
+    .catch(function(){$('gal').innerHTML='';$('gal').appendChild(h('div',{class:'none',text:'לא הצלחתי לטעון את רשימת התמונות.'}));});
+}
+function usage(){
+  var on={},arc={};
+  cfg.def.forEach(function(s){if(s.src)on[s.src]=1;});
+  cfg.wins.forEach(function(w){w.slides.forEach(function(s){if(s.src)on[s.src]=1;});});
+  cfg.arch.forEach(function(s){if(s.src)arc[s.src]=1;});
+  return {on:on,arc:arc};
+}
+function updateBadges(){
+  if(!cfg)return;
+  var u=usage();
+  galBadges.forEach(function(b){
+    b.el.textContent=u.on[b.src]?'במסך':u.arc[b.src]?'בארכיון':'לא בשימוש';
+    b.el.className='badge'+(u.on[b.src]?' on':u.arc[b.src]?' arc':'');
+  });
+}
+function galTargets(){
+  var sel=$('galTarget'),v=sel.value;sel.innerHTML='';
+  sel.appendChild(h('option',{value:'def',text:'מוצג כל היום'}));
+  cfg.wins.forEach(function(w,n){sel.appendChild(h('option',{value:String(n),text:'חלון: '+(w.name||'חלון זמן')}));});
+  if(v&&sel.querySelector('option[value="'+v+'"]'))sel.value=v;
+}
+function renderGallery(){
+  var box=$('gal');box.innerHTML='';galBadges=[];
+  if(!gallery.length){box.className='';box.appendChild(h('div',{class:'none',text:'עוד לא הועלו תמונות.'}));return;}
+  box.className='gal';
+  gallery.forEach(function(src){
+    var badge=h('span',{class:'badge'}),d=/([0-9]{4})-([0-9]{2})-([0-9]{2})/.exec(src);
+    galBadges.push({src:src,el:badge});
+    box.appendChild(h('div',{class:'tile'},[
+      h('a',{href:src,target:'_blank',rel:'noopener',title:'לפתוח את התמונה בגדול'},[h('img',{src:src,alt:'',loading:'lazy'})]),
+      h('div',{class:'meta'},[h('span',{text:d?d[3]+'/'+d[2]+'/'+d[1]:''}),badge]),
+      h('button',{class:'btn ghost sm',type:'button',text:'+ למסך',onclick:function(){
+        var v=$('galTarget').value,t=v==='def'?cfg.def:cfg.wins[+v].slides;
+        t.push(inSlide({src:src}));render();toast('התמונה נוספה. לא לשכוח לשמור.');}})
+    ]));
+  });
+  updateBadges();
 }
 
 // ---------- חלונות זמן ----------
@@ -386,6 +490,7 @@ function winWarn(w){
 }
 function renderWins(){
   var box=$('wins');box.innerHTML='';
+  if($('arch').firstChild){renderArch();galTargets();}
   if(!cfg.wins.length)box.appendChild(h('div',{class:'none',text:'עוד אין חלונות זמן. המסך מציג כל היום את "מוצג כל היום".'}));
   cfg.wins.forEach(function(w,i){
     var warn=h('p',{class:'warn'}),test=h('a',{target:'_blank',rel:'noopener',text:'👁 לבדוק במסך (אחרי שמירה)'});
@@ -454,7 +559,7 @@ function showNow(){
 function render(){
   bind('gName','schoolName');bind('gSec','slideSeconds');bind('gRef','refreshMinutes');
   slideList($('defSlides'),cfg.def);
-  renderWins();changed();showNow();
+  renderWins();renderArch();galTargets();changed();showNow();
 }
 setInterval(showNow,30000);
 

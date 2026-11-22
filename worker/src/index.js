@@ -5,6 +5,7 @@
 //   POST /api/login      check the password
 //   PUT  /api/config     save the content           (Authorization: Bearer <password>)
 //   POST /api/image      upload one picture, returns {src}
+//   GET  /api/images     list of every uploaded picture
 // Storage: KV namespace SCREEN ("config", "img:<name>", "bak:<time>" = previous versions, kept 60 days).
 // Secret: ADMIN_PASSWORD.
 import ADMIN from './admin.html';
@@ -41,7 +42,7 @@ export default {
           'cache-control': 'public, max-age=604800', 'x-content-type-options': 'nosniff',
           'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'", ...CORS } });
       }
-      return json({ error: 'not found' }, 404);
+      if (p !== '/api/images') return json({ error: 'not found' }, 404);
     }
 
     if (!p.startsWith('/api/')) return json({ error: 'not found' }, 404);
@@ -52,6 +53,18 @@ export default {
     }
 
     if (p === '/api/login' && req.method === 'POST') return json({ ok: true });
+
+    if (p === '/api/images' && req.method === 'GET') {          // every picture ever uploaded, newest first
+      const names = [];
+      let cursor;
+      do {
+        const r = await env.SCREEN.list({ prefix: 'img:', cursor });
+        r.keys.forEach(k => names.push(k.name.slice(4)));
+        cursor = r.list_complete ? null : r.cursor;
+      } while (cursor);
+      names.sort().reverse();
+      return json({ images: names.map(n => 'images/' + n) });
+    }
 
     if (p === '/api/config' && req.method === 'PUT') {
       const text = await req.text();
